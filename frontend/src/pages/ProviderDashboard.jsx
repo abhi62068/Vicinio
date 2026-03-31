@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Power, CheckCircle, DollarSign, Star, Home, Bell, User, LogOut, Save, FileText, History, Edit3, ClipboardCheck, Clock, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { API_BASE_URL, API_WS_BASE_URL } from '../config/api';
 
 const ProviderDashboard = () => {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ const ProviderDashboard = () => {
 
     const syncProvider = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/location/provider/${String(userData.id)}`);
+        const res = await fetch(`${API_BASE_URL}/location/provider/${String(userData.id)}`);
         if (!res.ok) return;
         const p = await res.json();
 
@@ -70,7 +71,7 @@ const ProviderDashboard = () => {
     if (!userData || !isOnline) return;
 
     // ALL URLs MUST USE LOCALHOST NOW
-    const ws = new WebSocket(`ws://localhost:8000/ws/${String(userData.id)}`);
+    const ws = new WebSocket(`${API_WS_BASE_URL}/ws/${String(userData.id)}`);
 
     ws.onopen = () => setWsConnection(true);
     
@@ -99,11 +100,11 @@ const ProviderDashboard = () => {
     const fetchData = async () => {
       try {
         if (isOnline) {
-          const res = await fetch(`http://localhost:8000/location/my-requests/${userData.id}`); // CHANGED
+          const res = await fetch(`${API_BASE_URL}/location/my-requests/${userData.id}`); // CHANGED
           if (res.ok) setRequests(await res.json());
         }
         if (activeTab === 'earnings' || activeTab === 'home') {
-          const res = await fetch(`http://localhost:8000/location/history/${userData.id}?role=provider`); // CHANGED
+          const res = await fetch(`${API_BASE_URL}/location/history/${userData.id}?role=provider`); // CHANGED
           if (res.ok) {
             const data = await res.json();
             setHistory(data);
@@ -136,7 +137,7 @@ const ProviderDashboard = () => {
             bio: String(profileData.bio || "Professional service provider")
           };
 
-          const res = await fetch("http://localhost:8000/location/update", { // CHANGED
+          const res = await fetch(`${API_BASE_URL}/location/update`, { // CHANGED
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -164,7 +165,7 @@ const ProviderDashboard = () => {
   const handleLogout = async () => {
     if (isOnline && userData) {
       try {
-        await fetch("http://localhost:8000/location/update", { // CHANGED
+        await fetch(`${API_BASE_URL}/location/update`, { // CHANGED
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -188,7 +189,7 @@ const ProviderDashboard = () => {
   const handleAction = async (requestId, status) => {
     const toastId = toast.loading('Updating status...');
     try {
-      const res = await fetch(`http://localhost:8000/location/request/${requestId}?status=${status}`, {  // CHANGED
+      const res = await fetch(`${API_BASE_URL}/location/request/${requestId}?status=${status}`, {  // CHANGED
         method: 'PATCH' 
       });
       if (res.ok) {

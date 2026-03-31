@@ -7,21 +7,15 @@ import pymongo
 from routers import auth, location, admin, websocket 
 
 app = FastAPI(title="Geolocate API - Cloud Edition")
-# Define the frontend URLs that are allowed to connect.
-# Your browser origin is `http://localhost:5175`, so it must be included.
 origins = [
+    "https://vicinio.netlify.app",
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://localhost:5175",
-    "http://127.0.0.1:5175",
 ]
 
 # 2. Add the CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # Allows only your Vite frontend
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],   # Allows all HTTP methods (POST, GET, OPTIONS, etc.)
     allow_headers=["*"],   # Allows all headers
