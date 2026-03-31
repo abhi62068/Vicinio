@@ -9,6 +9,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import toast from 'react-hot-toast';
 import ConfirmModal from '../components/ConfirmModal'; 
+import { API_BASE_URL } from "../config/api";
 
 // Stable CDN for the User (Red) Marker
 const redIcon = new L.Icon({
@@ -95,20 +96,19 @@ const ReceiverDashboard = () => {
     
     const fetchData = async () => {
       try {
-        // CHANGED: Use 127.0.0.1 for stability
-        const geoUrl = `http://127.0.0.1:8000/location/nearby?lat=${userLocation[0]}&lng=${userLocation[1]}&radius_km=${filters.radius}`;
+        const geoUrl = `${API_BASE_URL}/location/nearby?lat=${userLocation[0]}&lng=${userLocation[1]}&radius_km=${filters.radius}`;
         const pRes = await fetch(geoUrl);
         if (pRes.ok) setProviders(await pRes.json());
 
         // Active bookings (pending/accepted) for live tracking
         const activeRes = await fetch(
-          `http://127.0.0.1:8000/location/active-requests/${String(userData.id)}?role=receiver`
+          `${API_BASE_URL}/location/active-requests/${String(userData.id)}?role=receiver`
         );
         if (activeRes.ok) setLiveBookings(await activeRes.json());
 
         // Completed/declined history
         const hRes = await fetch(
-          `http://127.0.0.1:8000/location/history/${String(userData.id)}?role=receiver`
+          `${API_BASE_URL}/location/history/${String(userData.id)}?role=receiver`
         );
         if (hRes.ok) setHistory(await hRes.json());
       } catch (error) { console.error("Sync error:", error); }
@@ -147,7 +147,7 @@ const ReceiverDashboard = () => {
     
     const toastId = toast.loading(`Contacting ${provider.name}...`);
     try {
-      const res = await fetch("http://127.0.0.1:8000/location/request", {
+      const res = await fetch(`${API_BASE_URL}/location/request`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
         body: JSON.stringify(payload),
@@ -174,7 +174,7 @@ const ReceiverDashboard = () => {
         const toastId = toast.loading('Withdrawing request...');
         try {
           // CHANGED: Ensure requestId is passed securely as string
-          const res = await fetch(`http://127.0.0.1:8000/location/request/${String(requestId)}`, { method: "DELETE" });
+          const res = await fetch(`${API_BASE_URL}/location/request/${String(requestId)}`, { method: "DELETE" });
           if (res.ok) {
             setLiveBookings((prev) => prev.filter((b) => b._id !== requestId));
             toast.success("Request withdrawn successfully.", { id: toastId });

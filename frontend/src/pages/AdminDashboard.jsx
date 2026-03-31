@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConfirmModal from '../components/ConfirmModal'; // Ensure this path matches your folder structure
+import { API_BASE_URL } from '../config/api';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -22,25 +23,25 @@ const AdminDashboard = () => {
 
   const fetchAllData = async () => {
     try {
-      const statsRes = await fetch("http://localhost:8000/admin/stats");
+      const statsRes = await fetch(`${API_BASE_URL}/admin/stats`);
       if (statsRes.ok) setSystemStats(await statsRes.json());
 
-      const revRes = await fetch("http://localhost:8000/admin/revenue-analytics");
+      const revRes = await fetch(`${API_BASE_URL}/admin/revenue-analytics`);
       if (revRes.ok) setRevenueData(await revRes.json());
 
-      const dailyRes = await fetch("http://localhost:8000/admin/daily-report");
+      const dailyRes = await fetch(`${API_BASE_URL}/admin/daily-report`);
       if (dailyRes.ok) setDailyData(await dailyRes.json());
 
-      const activityRes = await fetch("http://localhost:8000/admin/recent-activity");
+      const activityRes = await fetch(`${API_BASE_URL}/admin/recent-activity`);
       if (activityRes.ok) setRecentActivity(await activityRes.json());
 
       if (activeTab === 'god-mode') {
-        const listRes = await fetch("http://localhost:8000/admin/providers");
+        const listRes = await fetch(`${API_BASE_URL}/admin/providers`);
         if (listRes.ok) setProvidersList(await listRes.json());
       }
 
       if (activeTab === 'users') {
-        const usersRes = await fetch("http://localhost:8000/auth/users");
+        const usersRes = await fetch(`${API_BASE_URL}/auth/users`);
         if (usersRes.ok) setSqlUsers(await usersRes.json());
       }
     } catch (e) { 
@@ -57,7 +58,7 @@ const AdminDashboard = () => {
   const handleSeedData = async (count) => {
     const toastId = toast.loading('Seeding data...');
     try {
-      const res = await fetch(`http://localhost:8000/admin/seed-providers/${count}`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/admin/seed-providers/${count}`, { method: 'POST' });
       const data = await res.json();
       toast.success(data.message, { id: toastId });
       fetchAllData();
@@ -75,7 +76,7 @@ const AdminDashboard = () => {
         setConfirmModal({ ...confirmModal, isOpen: false });
         const toastId = toast.loading('Wiping map...');
         try {
-          const res = await fetch(`http://localhost:8000/admin/clear-map`, { method: 'DELETE' });
+          const res = await fetch(`${API_BASE_URL}/admin/clear-map`, { method: 'DELETE' });
           if (res.ok) {
             toast.success("Map wiped successfully.", { id: toastId });
             fetchAllData();
@@ -99,7 +100,7 @@ const AdminDashboard = () => {
         setConfirmModal({ ...confirmModal, isOpen: false });
         const toastId = toast.loading('Deleting provider...');
         try {
-          const res = await fetch(`http://localhost:8000/admin/provider/${pid}`, { method: 'DELETE' });
+          const res = await fetch(`${API_BASE_URL}/admin/provider/${pid}`, { method: 'DELETE' });
           if (res.ok) {
             toast.success(`Provider ${pid} deleted.`, { id: toastId });
             fetchAllData();
@@ -123,7 +124,7 @@ const AdminDashboard = () => {
         setConfirmModal({ ...confirmModal, isOpen: false });
         const toastId = toast.loading('Deleting user account...');
         try {
-          const res = await fetch(`http://localhost:8000/auth/user/${userId}`, { method: 'DELETE' });
+          const res = await fetch(`${API_BASE_URL}/auth/user/${userId}`, { method: 'DELETE' });
           if (res.ok) {
             toast.success("User account deleted.", { id: toastId });
             fetchAllData();

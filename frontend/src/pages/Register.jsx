@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, Briefcase } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { API_BASE_URL } from '../config/api';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ const Register = () => {
     };
 
     try {
-      const response = await fetch("http://localhost:8000/auth/register", {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
