@@ -10,6 +10,7 @@ app = FastAPI(title="Geolocate API - Cloud Edition")
 origins = [
     "https://vicinio.netlify.app",
     "http://localhost:5173",
+    "https://*.netlify.app",
 ]
 
 # 2. Add the CORS middleware
