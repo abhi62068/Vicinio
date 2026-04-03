@@ -1,1 +1,60 @@
 @import "tailwindcss";
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --sidebar-bg: #111827;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border-color: #f3f4f6;
+  --card-bg: #ffffff;
+  --map-filter: none;
+}
+
+[data-theme='dark'] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --sidebar-bg: #020617;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border-color: #334155;
+  --card-bg: #1e293b;
+  --map-filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.5s ease, color 0.5s ease;
+}
+
+.bg-white { background-color: var(--card-bg) !important; }
+.bg-gray-50 { background-color: var(--bg-secondary) !important; }
+.text-gray-900, .text-slate-800 { color: var(--text-primary) !important; }
+.text-gray-500, .text-gray-400 { color: var(--text-secondary) !important; }
+.border-gray-100, .border-gray-200 { border-color: var(--border-color) !important; }
+
+/* Cinematic Transition */
+* {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.map-tiles {
+  filter: var(--map-filter);
+  transition: filter 1s ease;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #334155;
+}

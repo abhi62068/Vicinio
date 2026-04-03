@@ -21,6 +21,9 @@ try:
     users_collection = db["users"]
     locations_collection = db["provider_locations"]
     request_collection = db["service_requests"]
+    chat_collection = db["chat_messages"]
+    reviews_collection = db["service_reviews"]
+    sos_logs = db["sos_alerts_history"]
     
     # Send a ping to confirm a successful connection
     client.admin.command('ping')

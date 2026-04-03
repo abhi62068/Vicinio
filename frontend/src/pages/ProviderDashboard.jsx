@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Power, CheckCircle, DollarSign, Star, Home, Bell, User, LogOut, Save, FileText, History, Edit3, ClipboardCheck, Clock, Zap } from 'lucide-react';
+import { Power, CheckCircle, IndianRupee, Star, Home, Bell, User, LogOut, Save, FileText, History, Edit3, ClipboardCheck, Clock, Zap, Sun, Moon, MessageCircle, Send, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE_URL, API_WS_BASE_URL } from '../config/api';
 
@@ -12,10 +12,15 @@ const ProviderDashboard = () => {
   const [requests, setRequests] = useState([]);
   const [history, setHistory] = useState([]);
   const [completedJobsCount, setCompletedJobsCount] = useState(0); 
+  const [profileData, setProfileData] = useState({ bio: "", experience_years: 0, base_charge: 0, service_category: "" });
+
+  // Phase 2: Chat & Theme
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [activeChat, setActiveChat] = useState(null); 
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [wsConnection, setWsConnection] = useState(false);
-
-  const [profileData, setProfileData] = useState({ bio: "", experience_years: 0, base_charge: 0, service_category: "" });
 
   // 1. Initialize User Data
   useEffect(() => {
@@ -31,7 +36,8 @@ const ProviderDashboard = () => {
         service_category: parsed.service_category || "General" 
       });
     }
-  }, [navigate]);
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [navigate, theme]);
 
   // 2. Sync provider online status + profile from MongoDB after refresh.
   useEffect(() => {
@@ -80,11 +86,14 @@ const ProviderDashboard = () => {
       if (payload.type === "NEW_REQUEST") {
         setRequests(prev => [payload.data, ...prev]);
         toast.success("New Job Request Received!", { icon: '🔔' });
-      } else if (payload.type === "STATUS_UPDATE") {
-        const { request_id: requestId, status } = payload || {};
-        // Keep the dashboard list clean: requests panel only shows pending/accepted.
         if (requestId && (status === "declined" || status === "completed")) {
           setRequests(prev => prev.filter(r => String(r._id) !== String(requestId)));
+        }
+      } else if (payload.type === "NEW_CHAT_MESSAGE") {
+        if (activeChat && activeChat.request_id === payload.data.request_id) {
+            setChatMessages(prev => [...prev, payload.data]);
+        } else {
+            toast(`Message from ${payload.data.sender_name}`, { icon: '💬' });
         }
       }
     };
@@ -117,6 +126,44 @@ const ProviderDashboard = () => {
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [userData, isOnline, activeTab]);
+
+  useEffect(() => {
+    if (activeChat) {
+        fetch(`${API_BASE_URL}/location/chat/history/${activeChat.request_id}`)
+            .then(res => res.json())
+            .then(data => setChatMessages(data));
+    }
+  }, [activeChat]);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  const handleSendChat = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !activeChat) return;
+
+    const msgPayload = {
+      request_id: activeChat.request_id,
+      sender_id: String(userData.id),
+      sender_name: String(userData.name),
+      receiver_id: activeChat.receiver_id,
+      message: newMessage
+    };
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/location/chat/send`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(msgPayload)
+      });
+      if (res.ok) {
+        setChatMessages(prev => [...prev, { ...msgPayload, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+        setNewMessage("");
+      }
+    } catch (e) { console.error(e); }
+  };
 
   const toggleStatus = async () => {
     const nextStatus = !isOnline;
@@ -229,10 +276,16 @@ const ProviderDashboard = () => {
         <div className="p-6 border-b border-gray-800"><h2 className="text-2xl font-bold text-blue-400 tracking-tight">Geolocate</h2></div>
         <nav className="flex-1 p-4 space-y-2">
           <button onClick={() => setActiveTab('home')} className={`w-full flex items-center p-3 rounded-xl transition-all ${activeTab === 'home' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-800'}`}><Home size={20} className="mr-3"/> Dashboard</button>
-          <button onClick={() => setActiveTab('earnings')} className={`w-full flex items-center p-3 rounded-xl transition-all ${activeTab === 'earnings' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-800'}`}><DollarSign size={20} className="mr-3"/> Earnings</button>
+          <button onClick={() => setActiveTab('earnings')} className={`w-full flex items-center p-3 rounded-xl transition-all ${activeTab === 'earnings' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-800'}`}><IndianRupee size={20} className="mr-3"/> Earnings</button>
           <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center p-3 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-800'}`}><User size={20} className="mr-3"/> Profile</button>
         </nav>
-        <div className="p-4 border-t border-gray-800"><button onClick={handleLogout} className="w-full flex items-center p-3 text-gray-400 hover:text-white hover:bg-red-600/20 rounded-xl transition-all"><LogOut size={20} className="mr-3"/> Logout</button></div>
+        <div className="p-4 border-t border-gray-800 space-y-2">
+            <button onClick={toggleTheme} className="w-full flex items-center p-3 text-gray-400 hover:text-white hover:bg-blue-600/20 rounded-xl transition-all">
+                {theme === 'light' ? <Moon size={20} className="mr-3"/> : <Sun size={20} className="mr-3"/>}
+                {theme === 'light' ? 'Night Mode' : 'Day Mode'}
+            </button>
+            <button onClick={handleLogout} className="w-full flex items-center p-3 text-gray-400 hover:text-white hover:bg-red-600/20 rounded-xl transition-all"><LogOut size={20} className="mr-3"/> Logout</button>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -280,11 +333,14 @@ const ProviderDashboard = () => {
                           </>
                         ) : (
                           <>
-                            <button onClick={() => handleAction(req._id, 'completed')} className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center hover:bg-green-700 shadow-sm transition-all">
-                              <ClipboardCheck size={18} className="mr-2"/> Mark as Finished
+                            <button onClick={() => handleAction(req._id, 'completed')} className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center hover:bg-green-700 shadow-sm transition-all text-sm">
+                              <ClipboardCheck size={18} className="mr-2"/> Finish
                             </button>
-                            <button onClick={() => handleAction(req._id, 'declined')} className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all">
-                              Cancel Booking
+                            <button onClick={() => setActiveChat({ request_id: req._id, receiver_id: req.receiver_id, provider_name: req.receiver_name })} className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all" title="Chat">
+                                <MessageCircle size={20} />
+                            </button>
+                            <button onClick={() => handleAction(req._id, 'declined')} className="px-4 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all text-xs">
+                              Cancel
                             </button>
                           </>
                         )}
@@ -382,7 +438,16 @@ const ProviderDashboard = () => {
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Service Category</label>
                         <select value={profileData.service_category} onChange={(e) => setProfileData({...profileData, service_category: e.target.value})} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-800">
-                            <option value="Plumber">Plumber</option><option value="Electrician">Electrician</option><option value="Mechanic">Mechanic</option><option value="General Handyman">General Handyman</option>
+                            <option value="Plumber">Plumber</option>
+                            <option value="Electrician">Electrician</option>
+                            <option value="Mechanic">Mechanic</option>
+                            <option value="Cleaner">Cleaner</option>
+                            <option value="Gardener">Gardener</option>
+                            <option value="Carpenter">Carpenter</option>
+                            <option value="Painter">Painter</option>
+                            <option value="AC Technician">AC Technician</option>
+                            <option value="Pest Control">Pest Control</option>
+                            <option value="Handyman">Handyman</option>
                         </select>
                     </div>
                     <div className="grid grid-cols-2 gap-6">
@@ -401,6 +466,31 @@ const ProviderDashboard = () => {
           )}
         </main>
       </div>
+      {activeChat && (
+          <div className="fixed bottom-6 right-6 w-80 bg-white shadow-2xl rounded-2xl z-[2000] border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-300">
+              <div className="bg-slate-900 p-4 text-white flex justify-between items-center">
+                  <div>
+                      <h4 className="text-sm font-black tracking-tight">{activeChat.provider_name}</h4>
+                      <p className="text-[10px] text-blue-400 uppercase font-bold tracking-widest">Active Chat</p>
+                  </div>
+                  <button onClick={() => setActiveChat(null)} className="p-1 hover:bg-white/10 rounded-lg"><XCircle size={20} /></button>
+              </div>
+              <div className="h-64 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+                  {chatMessages.map((m, i) => (
+                      <div key={i} className={`flex ${String(m.sender_id) === String(userData.id) ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[80%] p-3 rounded-2xl text-xs shadow-sm ${String(m.sender_id) === String(userData.id) ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'}`}>
+                              {m.message}
+                              <div className={`text-[8px] mt-1 opacity-60 ${String(m.sender_id) === String(userData.id) ? 'text-right' : ''}`}>{m.timestamp}</div>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+              <form onSubmit={handleSendChat} className="p-3 border-t bg-white flex gap-2">
+                  <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500" />
+                  <button type="submit" className="bg-blue-600 text-white p-2 rounded-xl h-9 w-9 flex items-center justify-center shadow-lg shadow-blue-200 hover:bg-blue-700"><Send size={16} /></button>
+              </form>
+          </div>
+      )}
     </div>
   );
 };

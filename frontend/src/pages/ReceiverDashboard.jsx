@@ -3,14 +3,15 @@ import { useNavigate } from "react-router-dom";
 import "leaflet/dist/leaflet.css";
 import {
   Search, MapPin, Wrench, Zap, Droplets, LogOut, Loader2, Star, Clock, 
-  DollarSign, BellRing, History as HistoryIcon, XCircle, Navigation, SlidersHorizontal, 
-  Map, Activity, Phone, AlertCircle, UserCircle, LifeBuoy, Shield, Flame, Building2
+  IndianRupee, BellRing, History as HistoryIcon, XCircle, Navigation, SlidersHorizontal, 
+  Map, Activity, Phone, AlertCircle, UserCircle, LifeBuoy, Shield, Flame, Building2,
+  Sparkles, Sprout, Hammer, Paintbrush, Wind, Bug, Settings, Sun, Moon, Send, MessageCircle
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import toast from 'react-hot-toast';
 import ConfirmModal from '../components/ConfirmModal'; 
-import { API_BASE_URL } from "../config/api";
+import { API_BASE_URL, API_WS_BASE_URL } from "../config/api";
 
 const redIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
@@ -66,6 +67,13 @@ const ReceiverDashboard = () => {
   const [filters, setFilters] = useState({ radius: 15, minRating: 0, minExperience: 0, maxCharge: 2000 });
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
+  // Phase 2: Chat & Rating & Theme
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [activeChat, setActiveChat] = useState(null); // { request_id, provider_id, provider_name }
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [ratingModal, setRatingModal] = useState({ isOpen: false, provider_id: '', request_id: '', provider_name: '' });
+
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
     if (!savedUser) navigate("/login");
@@ -77,7 +85,10 @@ const ReceiverDashboard = () => {
         () => setIsLocating(false)
       );
     }
-  }, [navigate]);
+    
+    // Apply theme
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [navigate, theme]);
 
   useEffect(() => {
     if (!userData || !userLocation) return;
@@ -102,6 +113,48 @@ const ReceiverDashboard = () => {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [userData, userLocation, filters.radius, emCategory]);
+
+  // WebSocket for Live Chat & Status
+  useEffect(() => {
+    if (!userData) return;
+    const socket = new WebSocket(`${API_WS_BASE_URL}/ws/${userData.id}`);
+    
+    socket.onmessage = (event) => {
+        const payload = JSON.parse(event.data);
+        if (payload.type === "STATUS_UPDATE") {
+            const { request_id, status, message } = payload;
+            toast.success(message);
+            setLiveBookings(prev => prev.map(b => b._id === request_id ? { ...b, status } : b));
+            
+            if (status === "completed") {
+                const req = liveBookings.find(b => b._id === request_id);
+                if (req) {
+                    setRatingModal({
+                        isOpen: true,
+                        provider_id: req.provider_id,
+                        request_id: req._id,
+                        provider_name: "Service Provider"
+                    });
+                }
+            }
+        } else if (payload.type === "NEW_CHAT_MESSAGE") {
+            if (activeChat && activeChat.request_id === payload.data.request_id) {
+                setChatMessages(prev => [...prev, payload.data]);
+            } else {
+                toast(`New message from ${payload.data.sender_name}`, { icon: '💬' });
+            }
+        }
+    };
+    return () => socket.close();
+  }, [userData, activeChat, liveBookings]);
+
+  useEffect(() => {
+    if (activeChat) {
+        fetch(`${API_BASE_URL}/location/chat/history/${activeChat.request_id}`)
+            .then(res => res.json())
+            .then(data => setChatMessages(data));
+    }
+  }, [activeChat]);
 
   const handleLogout = () => { localStorage.removeItem("user"); navigate("/login"); };
 
@@ -142,6 +195,57 @@ const ReceiverDashboard = () => {
       if (res.ok) toast.success(`Request sent to ${provider.name}!`, { id: toastId });
       else { const err = await res.json(); toast.error(err.detail || "Failed to send request", { id: toastId }); }
     } catch (error) { toast.error("Network error. Could not send request.", { id: toastId }); }
+  };
+
+  const handleSendChat = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !activeChat) return;
+
+    const msgPayload = {
+      request_id: activeChat.request_id,
+      sender_id: String(userData.id),
+      sender_name: String(userData.name),
+      receiver_id: activeChat.provider_id,
+      message: newMessage
+    };
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/location/chat/send`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(msgPayload)
+      });
+      if (res.ok) {
+        setChatMessages(prev => [...prev, { ...msgPayload, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+        setNewMessage("");
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleSubmitReview = async (rating, comment) => {
+     const payload = {
+         request_id: ratingModal.request_id,
+         provider_id: ratingModal.provider_id,
+         receiver_id: String(userData.id),
+         rating,
+         comment
+     };
+     try {
+         const res = await fetch(`${API_BASE_URL}/location/review`, {
+             method: "POST", headers: { "Content-Type": "application/json" },
+             body: JSON.stringify(payload)
+         });
+         if (res.ok) {
+             toast.success("Thank you for your feedback!");
+             setRatingModal({ ...ratingModal, isOpen: false });
+             setLiveBookings(prev => prev.filter(b => b._id !== ratingModal.request_id));
+         }
+     } catch (e) { console.error(e); }
+  };
+
+  const toggleTheme = () => {
+      const newTheme = theme === 'light' ? 'dark' : 'light';
+      setTheme(newTheme);
+      localStorage.setItem('theme', newTheme);
   };
 
   const handleWithdraw = (requestId) => {
@@ -214,6 +318,11 @@ const ReceiverDashboard = () => {
             </button>
           </div>
 
+          <button onClick={toggleTheme} className="flex flex-col items-center group text-gray-500 hover:text-blue-500 transition-all mb-6" title="Toggle Theme">
+            {theme === 'light' ? <Moon size={22} className="mb-1" /> : <Sun size={22} className="mb-1" />}
+            <span className="text-[9px] font-bold uppercase tracking-widest">{theme === 'light' ? 'Night' : 'Day'}</span>
+          </button>
+
           <button onClick={handleLogout} className="flex flex-col items-center group text-gray-500 hover:text-red-400 transition-all" title="Exit">
             <LogOut size={22} className="mb-1" />
             <span className="text-[9px] font-bold uppercase tracking-widest">Exit</span>
@@ -232,12 +341,17 @@ const ReceiverDashboard = () => {
             <div className="p-4 bg-blue-50/50 border-b border-blue-100 shrink-0">
               <h3 className="text-[10px] font-bold text-blue-600 uppercase mb-2 flex items-center tracking-widest"><BellRing size={12} className="mr-2 animate-pulse" /> Active Service Tracking</h3>
               {liveBookings.map((b) => (
-                <div key={b._id} className="bg-white p-3 rounded-xl shadow-sm border border-blue-100 mb-2 flex justify-between items-center">
-                  <div>
+                <div key={b._id} className="bg-white p-3 rounded-xl shadow-sm border border-blue-100 mb-2 flex justify-between items-center group/card">
+                  <div className="flex-1">
                     <p className="text-sm font-bold text-gray-800">{b.service_name}</p>
-                    <p className={`text-[10px] font-bold uppercase mt-0.5 ${b.status === "accepted" ? "text-green-600" : "text-orange-500"}`}>{b.status === "accepted" ? `Accepted @ ${b.accepted_at}` : "Awaiting response..."}</p>
+                    <p className={`text-[10px] font-bold uppercase mt-0.5 ${b.status === "accepted" ? "text-green-600" : "text-orange-500"}`}>{b.status === "accepted" ? `Accepted` : "Awaiting response..."}</p>
                   </div>
-                  <button onClick={() => handleWithdraw(b._id)} className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-all"><XCircle size={18} /></button>
+                  <div className="flex gap-1">
+                    {b.status === "accepted" && (
+                        <button onClick={() => setActiveChat({ request_id: b._id, provider_id: b.provider_id, provider_name: b.provider_name || "Provider" })} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all" title="Chat"><MessageCircle size={18} /></button>
+                    )}
+                    <button onClick={() => handleWithdraw(b._id)} className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-all"><XCircle size={18} /></button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -368,7 +482,19 @@ const ReceiverDashboard = () => {
                 )}
 
                 <div className="flex space-x-2 overflow-x-auto pb-1 no-scrollbar shrink-0">
-                  {[{ name: "All", icon: <MapPin size={16} /> }, { name: "Plumber", icon: <Droplets size={16} /> }, { name: "Electrician", icon: <Zap size={16} /> }, { name: "Mechanic", icon: <Wrench size={16} /> }].map((cat) => (
+                  {[
+                    { name: "All", icon: <MapPin size={16} /> }, 
+                    { name: "Plumber", icon: <Droplets size={16} /> }, 
+                    { name: "Electrician", icon: <Zap size={16} /> }, 
+                    { name: "Mechanic", icon: <Wrench size={16} /> },
+                    { name: "Cleaner", icon: <Sparkles size={16} /> },
+                    { name: "Gardener", icon: <Sprout size={16} /> },
+                    { name: "Carpenter", icon: <Hammer size={16} /> },
+                    { name: "Painter", icon: <Paintbrush size={16} /> },
+                    { name: "AC Technician", icon: <Wind size={16} /> },
+                    { name: "Pest Control", icon: <Bug size={16} /> },
+                    { name: "Handyman", icon: <Settings size={16} /> }
+                  ].map((cat) => (
                     <button key={cat.name} onClick={() => setActiveCategory(cat.name)} className={`flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeCategory === cat.name ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-50 hover:text-gray-800"}`}>
                       <span className="mr-2">{cat.icon}</span>{cat.name}
                     </button>
@@ -377,6 +503,38 @@ const ReceiverDashboard = () => {
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {liveBookings.length > 0 && activeCategory === "All" && !searchTerm && (
+                  <div className="mb-6 space-y-3">
+                    <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest px-1">Ongoing Services</h3>
+                    {liveBookings.map((b) => (
+                      <div key={b._id} className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 rounded-[2rem] text-white shadow-xl shadow-blue-200 relative overflow-hidden group">
+                        <div className="relative z-10">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Active Request</p>
+                              <h4 className="text-xl font-black italic">{b.service_name}</h4>
+                            </div>
+                            <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">{b.status}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-4 mt-2">
+                             <div className="flex-1">
+                               <p className="text-xs font-bold opacity-80">Provider: <span className="text-white">{b.provider_name || "Assigned"}</span></p>
+                               <div className="flex items-center mt-1 text-[10px] font-bold opacity-60"><Clock size={10} className="mr-1"/> Started at {b.accepted_at || "Just now"}</div>
+                             </div>
+                             <div className="flex gap-2">
+                               {b.status === "accepted" && (
+                                 <button onClick={() => setActiveChat({ request_id: b._id, provider_id: b.provider_id, provider_name: b.provider_name || "Provider" })} className="p-3 bg-white text-blue-600 rounded-xl hover:scale-105 transition-all shadow-lg shadow-blue-900/20"><MessageCircle size={20} /></button>
+                               )}
+                               <button onClick={() => handleWithdraw(b._id)} className="p-3 bg-red-500/20 text-white border border-white/20 rounded-xl hover:bg-red-500/40 transition-all"><XCircle size={20} /></button>
+                             </div>
+                          </div>
+                        </div>
+                        <Activity className="absolute bottom-[-20px] right-[-20px] text-white/5" size={120} />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <p className="text-[10px] tracking-widest text-gray-400 font-black uppercase px-1 text-center">Found {filteredProviders.length} providers &bull; {filters.radius}km</p>
                 {filteredProviders.map((p) => {
                   const isRequested = liveBookings.some((b) => String(b.provider_id) === String(p.provider_id));
@@ -397,7 +555,7 @@ const ReceiverDashboard = () => {
                       <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 font-medium bg-gray-50 p-3 rounded-2xl border border-gray-100 mb-4">
                         <span className="flex items-center"><Clock size={14} className="mr-2 text-blue-500" /> {p.experience} Years</span>
                         <span className="flex items-center"><MapPin size={14} className="mr-2 text-red-400" /> {distance} km away</span>
-                        <span className="flex items-center col-span-2 text-emerald-700 font-black tracking-wide mt-1"><DollarSign size={14} className="mr-1" /> Base Fee: ₹{p.charge}</span>
+                        <span className="flex items-center col-span-2 text-emerald-700 font-black tracking-wide mt-1"><IndianRupee size={14} className="mr-1" /> Base Fee: ₹{p.charge}</span>
                       </div>
                       
                       <div className="flex gap-2">
@@ -445,9 +603,87 @@ const ReceiverDashboard = () => {
             </Marker>
           </MapContainer>
         </div>
+
+        {/* FLOATING UI OVERLAYS */}
+        {activeChat && (
+          <ChatWindow 
+            activeChat={activeChat} 
+            messages={chatMessages} 
+            newMessage={newMessage}
+            setNewMessage={setNewMessage}
+            onSend={handleSendChat}
+            onClose={() => setActiveChat(null)}
+            userId={userData.id}
+          />
+        )}
+
+        <RatingModal 
+          isOpen={ratingModal.isOpen}
+          providerName={ratingModal.provider_name}
+          onSubmit={handleSubmitReview}
+        />
       </div>
     </>
   );
+};
+
+// --- CHAT WINDOW COMPONENT ---
+const ChatWindow = ({ activeChat, messages, newMessage, setNewMessage, onSend, onClose, userId }) => {
+    const scrollRef = React.useRef();
+    useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
+
+    return (
+        <div className="absolute bottom-4 left-4 w-80 bg-white shadow-2xl rounded-2xl z-[1010] border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-300">
+            <div className="bg-slate-900 p-4 text-white flex justify-between items-center">
+                <div>
+                    <h4 className="text-sm font-black tracking-tight">{activeChat.provider_name}</h4>
+                    <p className="text-[10px] text-blue-400 uppercase font-bold tracking-widest">Active Chat</p>
+                </div>
+                <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg"><XCircle size={20} /></button>
+            </div>
+            <div ref={scrollRef} className="h-64 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+                {messages.map((m, i) => (
+                    <div key={i} className={`flex ${String(m.sender_id) === String(userId) ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-2xl text-xs shadow-sm ${String(m.sender_id) === String(userId) ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'}`}>
+                            {m.message}
+                            <div className={`text-[8px] mt-1 opacity-60 ${String(m.sender_id) === String(userId) ? 'text-right' : ''}`}>{m.timestamp}</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <form onSubmit={onSend} className="p-3 border-t bg-white flex gap-2">
+                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500" />
+                <button type="submit" className="bg-blue-600 text-white p-2 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700"><Send size={16} /></button>
+            </form>
+        </div>
+    );
+};
+
+// --- RATING MODAL COMPONENT ---
+const RatingModal = ({ isOpen, providerName, onSubmit }) => {
+    const [rating, setRating] = useState(5);
+    const [comment, setComment] = useState("");
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl border border-gray-100 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-orange-500"></div>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight text-center mb-2">Service Completed!</h3>
+                <p className="text-gray-500 text-center text-sm font-medium mb-6">How was your experience with {providerName}?</p>
+                
+                <div className="flex justify-center gap-2 mb-6">
+                    {[1, 2, 3, 4, 5].map(s => (
+                        <button key={s} onClick={() => setRating(s)} className={`p-2 transition-all ${rating >= s ? 'text-yellow-500 animate-in zoom-in-50' : 'text-gray-200'}`}><Star size={32} fill={rating >= s ? 'currentColor' : 'none'} /></button>
+                    ))}
+                </div>
+
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your feedback here..." className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 resize-none h-24 mb-6" />
+
+                <button onClick={() => onSubmit(rating, comment)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black shadow-xl shadow-slate-900/20 hover:bg-blue-600 transition-all uppercase tracking-widest text-xs">Submit Feedback</button>
+            </div>
+        </div>
+    );
 };
 
 export default ReceiverDashboard;
