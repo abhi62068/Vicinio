@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import ReceiverDashboard from './pages/ReceiverDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import ProviderDashboard from './pages/ProviderDashboard';
+import DispatchDashboard from './pages/DispatchDashboard';
 
 const App = () => {
   return (
@@ -26,6 +27,7 @@ const App = () => {
             <Route path="/receiver" element={<ReceiverDashboard />} />
             <Route path="/provider" element={<ProviderDashboard />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/dispatch" element={<DispatchDashboard />} />
 
             {/* Default Redirect */}
             <Route path="*" element={<Navigate to="/login" replace />} />
