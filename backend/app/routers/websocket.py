@@ -35,3 +35,18 @@ async def notify_user(user_id: str, message: dict):
     else:
         print(f"❌ [NOTIFY] FAILED: Provider '{user_id}' is NOT in the active connections list!")
         print(f"📋 [NOTIFY] We only have these IDs connected right now: {list(active_connections.keys())}\n")
+
+async def notify_dispatch(message: dict):
+    """Utility function to fire SOS alerts to the central dispatch dashboard."""
+    print("\n🚨 [SOS DISPATCH] Attempting to alert dispatch dashboard...")
+    dispatch_id = "dispatch"
+    
+    if dispatch_id in active_connections:
+        websocket = active_connections[dispatch_id]
+        try:
+            await websocket.send_json(message)
+            print(f"✅ [SOS DISPATCH] SUCCESS! Alert delivered to dispatch!\n")
+        except Exception as e:
+            print(f"⚠️ [SOS DISPATCH] Failed to send to dispatch: {e}\n")
+    else:
+        print(f"❌ [SOS DISPATCH] FAILED: Dispatch Dashboard is NOT online!")

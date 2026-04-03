@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from bson import ObjectId
 from typing import List, Optional
 from datetime import datetime
-from routers.websocket import notify_user 
+from routers.websocket import notify_user, notify_dispatch
 
 router = APIRouter(prefix="/location", tags=["Location"])
 
@@ -18,6 +18,12 @@ class ServiceRequest(BaseModel):
     status: str = "pending"
     price: float = 0.0
     created_at: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+class SOSRequest(BaseModel):
+    user_id: str
+    user_name: str
+    lat: float
+    lng: float
 
 @router.post("/update")
 async def update_location(data: LocationUpdate):
@@ -101,6 +107,67 @@ async def get_nearby_providers(
             })
         return providers
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/sos")
+async def trigger_sos(request: SOSRequest):
+    message = {
+        "type": "sos_alert",
+        "user_id": request.user_id,
+        "user_name": request.user_name,
+        "location": [request.lat, request.lng],
+        "created_at": datetime.now().strftime("%H:%M:%S")
+    }
+    await notify_dispatch(message)
+    return {"message": "SOS Alert triggered successfully"}
+
+@router.get("/emergency-services")
+async def get_emergency_services(
+    lat: float = Query(..., description="User's latitude"),
+    lng: float = Query(..., description="User's longitude"),
+    radius_km: float = Query(50.0, description="Search radius in kilometers"),
+    category: Optional[str] = Query(None, description="Category filter (e.g. Police, Fire, Ambulance)")
+):
+    try:
+        match_query = {"is_emergency": True}
+        if category and category != "All":
+            match_query["category"] = category
+            
+        max_distance_meters = radius_km * 1000.0
+        
+        pipeline = [
+            {
+                "$geoNear": {
+                    "near": {"type": "Point", "coordinates": [lng, lat]},
+                    "distanceField": "distance",
+                    "maxDistance": max_distance_meters,
+                    "spherical": True,
+                    "query": match_query
+                }
+            },
+            {"$limit": 50}
+        ]
+        
+        cursor = locations_collection.aggregate(pipeline)
+        
+        results = []
+        for doc in cursor:
+            dist_km = doc.get("distance", 0) / 1000.0
+            results.append({
+                "provider_id": doc.get("provider_id", ""),
+                "id": str(doc.get("_id", "")),
+                "name": doc.get("name", ""),
+                "category": doc.get("category", "Emergency"),
+                "lat": doc["location"]["coordinates"][1],
+                "lng": doc["location"]["coordinates"][0],
+                "phone": doc.get("phone", "102"),
+                "distance": dist_km
+            })
+            
+        return results
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/request")
